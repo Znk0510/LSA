@@ -213,7 +213,6 @@
                                         <tr>
                                             <th scope="col" class="px-8 py-4 text-left text-sm font-bold text-gray-500 uppercase tracking-wider">狀態</th>
                                             <th scope="col" class="px-8 py-4 text-left text-sm font-bold text-gray-500 uppercase tracking-wider">姓名 / 學號</th>
-                                            <th scope="col" class="px-8 py-4 text-left text-sm font-bold text-gray-500 uppercase tracking-wider w-1/3">網路流量 (KB/s)</th>
                                         </tr>
                                     </thead>
                                     <tbody class="bg-white divide-y divide-gray-100 text-base">
@@ -221,7 +220,7 @@
                                             <td class="px-8 py-5 whitespace-nowrap">
                                                 <span :class="getStatusBadgeClass(student)" class="px-3 py-1.5 inline-flex text-xs leading-5 font-bold rounded-full items-center gap-2 border">
                                                     <span class="w-2 h-2 rounded-full" :class="getStatusDotClass(student)"></span>
-                                                    {{ student.status === 'online' ? (student.traffic > 1000 ? '流量異常' : '連線正常') : '離線' }}
+                                                        {{ student.status === 'online' ? '連線中' : '離線' }}
                                                 </span>
                                             </td>
                                             <td class="px-8 py-5 whitespace-nowrap">
@@ -235,18 +234,11 @@
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td class="px-8 py-5 whitespace-nowrap align-middle">
-                                                <div class="w-full max-w-sm">
-                                                    <div class="flex justify-between text-sm mb-2 font-medium">
-                                                        <span class="text-gray-500">{{ student.traffic.toFixed(0) }} KB/s</span>
-                                                    </div>
-                                                    <div class="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
-                                                        <div class="h-2.5 rounded-full transition-all duration-500 ease-out shadow-sm" 
-                                                             :style="{ width: Math.min((student.traffic / 2500) * 100, 100) + '%' }"
-                                                             :class="getProgressColor(student.traffic)">
-                                                        </div>
-                                                    </div>
-                                                </div>
+                                            <td class="px-8 py-5 whitespace-nowrap text-right">
+                                                <span class="text-sm font-bold text-sakura-500" v-if="student.violation_count > 0">
+                                                    違規 {{ student.violation_count }} 次
+                                                </span>
+                                                <span class="text-sm text-gray-400" v-else>表現優良</span>
                                             </td>
                                         </tr>
                                     </tbody>
@@ -271,13 +263,13 @@
                                 
                                 <div class="p-6 flex flex-col flex-1 overflow-hidden">
                                     <div class="relative border-2 border-dashed border-primary-200 rounded-xl bg-gray-50 hover:bg-white hover:border-primary-400 transition-all duration-200 group cursor-pointer p-5 text-center shrink-0">
-                                        <input type="file" @change="handleFileSelect" accept=".pdf,.docx" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" :disabled="isUploading">
+                                        <input type="file" @change="handleFileSelect" accept=".pdf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" :disabled="isUploading">
                                         <div class="space-y-2 pointer-events-none">
                                             <div class="mx-auto w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm border border-gray-100 text-primary-300 group-hover:text-primary-500 group-hover:scale-110 transition-all">
                                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
                                             </div>
                                             <p class="text-sm font-bold text-gray-700">點擊或拖曳上傳教材</p>
-                                            <p class="text-xs text-gray-400">支援 PDF, DOCX</p>
+                                            <p class="text-xs text-gray-400">支援 PDF</p>
                                         </div>
                                     </div>
 
@@ -315,7 +307,7 @@
                             <div class="bg-white rounded-xl shadow-card border border-gray-200 flex flex-col flex-1 min-h-[250px] overflow-hidden">
                                 <div class="px-6 py-4 border-b border-gray-100 bg-cream-50/50 flex items-center shrink-0">
                                     <h2 class="text-base font-bold text-gray-800 flex items-center gap-2">
-                                        <span class="text-primary-500">即時流量監測
+                                        <span class="text-primary-500">不認真排行榜</span>
                                     </h2>
                                 </div>
                                 
@@ -363,7 +355,7 @@
 
             const getStatusBadgeClass = (student) => {
                 if (student.status !== 'online') return 'bg-gray-50 text-gray-500 border-gray-200';
-                if (student.traffic > 1000) return 'bg-sakura-50 text-sakura-600 border-sakura-200';
+                if (student.violation_count > 0) return 'bg-sakura-50 text-sakura-600 border-sakura-200';
                 return 'bg-success-50 text-success-600 border-success-200';
             };
             
@@ -401,52 +393,68 @@
                 return students.value;
             });
 
-            // 登入邏輯：改成呼叫後端 API 驗證帳密
+            // 登入
             const handleLogin = async () => {
                 isLoading.value = true;
-                
-                // 發送 POST 請求到你的後端 /api/login
                 try {
-                    // 對接真實 API
-                    const res = await fetch('/api/login', {
+                    // 指向正確的後端 Port 8000
+                    const response = await fetch('http://127.0.0.1:8000/api/login', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(loginForm.value)
+                        body: JSON.stringify(loginForm.value)
                     });
 
-                    if (res.ok) {
-                        currentUser.value = { name: '陳老師', email: 'teacher@school.edu.tw' };
-                        showToast('登入成功', 'success');
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        // 登入成功
+                        currentUser.value = data.user;
+                        showToast('登入成功！', 'success', '歡迎');
                         enterDashboard();
                     } else {
-                        showToast('登入失敗', 'error');
+                        // 登入失敗 (例如 401 錯誤)
+                        showToast(data.detail || '登入失敗', 'error');
                     }
-                } catch(e) {
-                    console.error(e);
-                    // 開發階段若後端沒開，可以保留原本的 fallback
-                    showToast('連線錯誤，進入離線模式', 'info'); 
-                    enterDashboard();
-                }finally {
+                } catch (error) {
+                    console.error("連線錯誤:", error);
+                    showToast('無法連線到後端 (請確認 Port 8000 有開啟)', 'error');
+                } finally {
                     isLoading.value = false;
                 }
             };
 
-            // 註冊邏輯
             const handleRegister = async () => {
                 if(registerForm.value.password !== registerForm.value.confirm) {
-                    showToast('請確認兩次密碼輸入一致', 'error', '驗證失敗');
+                    showToast('請確認兩次密碼輸入一致', 'error');
                     return;
                 }
                 isLoading.value = true;
-                
-                // TODO: 呼叫後端註冊 API
-                
-                setTimeout(() => {
-                    isLoading.value = false;
-                    showToast('請使用新帳號登入', 'success', '註冊成功');
-                    authMode.value = 'login';
+    
+                try {
+                // 指向 8000 port
+                    const res = await fetch('http://127.0.0.1:8000/api/register', { 
+                        method: 'POST', 
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            name: registerForm.value.name,
+                            email: registerForm.value.email,
+                            password: registerForm.value.password
+                        })
+                    });
+        
+                    const data = await res.json();
+        
+                    if(!res.ok) throw new Error(data.detail || '註冊失敗');
+
+                    showToast('註冊成功！請登入', 'success');
+                    authMode.value = 'login'; // 切換回登入畫面
                     loginForm.value.email = registerForm.value.email;
-                }, 1000);
+
+                } catch(e) {
+                    showToast(e.message, 'error');
+                } finally {
+                    isLoading.value = false;
+                }
             };
 
             const logout = () => {
@@ -464,7 +472,8 @@
                 setTimeout(() => {
                     fetchStudents(); 
                     initChart();     
-                    updateChart();   
+                    updateChart();
+                    fetchUploadHistory();
                     
                     // 設定輪詢：每 2.5 秒跟後端要一次最新資料
                     pollingInterval = setInterval(() => { 
@@ -477,17 +486,34 @@
             // 核心邏輯：從後端獲取學生資料
             const fetchStudents = async () => {
                 try {
-                    const response = await fetch('/api/students');
+                    // TODO: 請將此處 URL 替換為你的真實後端 API 地址
+                    // const response = await fetch('/api/students');
+                    
+                    /*
                     if (!response.ok) throw new Error('API 請求失敗');
-        
                     const data = await response.json();
-
-                    // 更新 Vue 的響應式變數，畫面會自動重繪
                     students.value = data; 
+                    */
+                   
+                   // 若尚未接通後端，暫時不執行任何動作，避免報錯
+                   // console.log("正在嘗試從 API 獲取資料...");
 
                 } catch (error) {
                     console.error("無法取得學生資料:", error);
-                    // 如果抓不到資料，保持空陣列或顯示錯誤
+                    // showToast('無法連線至伺服器', 'error');
+                }
+            };
+            
+            // 從後端獲取歷史上傳紀錄
+            const fetchUploadHistory = async () => {
+                try {
+                    const res = await fetch('http://127.0.0.1:8000/api/admin/files');
+                    if (res.ok) {
+                        const data = await res.json();
+                        uploadHistory.value = data; 
+                    }
+                } catch (error) {
+                    console.error("無法讀取歷史檔案:", error);
                 }
             };
 
@@ -503,7 +529,7 @@
                     data: {
                         labels: [],
                         datasets: [{
-                            label: '網路流量 (KB/s)', 
+                            label: '違規次數',
                             data: [],
                             backgroundColor: [],
                             borderRadius: 6,
@@ -517,7 +543,11 @@
                         animation: { duration: 500 },
                         plugins: { legend: { display: false } },
                         scales: { 
-                            x: { display: false, grid: { display: false } },
+                            x: { 
+                                display: true,
+                                grid: { display: false },
+                                ticks: { stepSize: 1 }
+                            },
                             y: { 
                                 grid: { display: false }, 
                                 ticks: { 
@@ -533,73 +563,75 @@
             
             const updateChart = async () => {
                 if(trafficChart && students.value.length > 0) {
-                    const sorted = [...students.value].filter(s => s.status === 'online').sort((a,b) => b.traffic - a.traffic).slice(0, 6);
-                    trafficChart.data.labels = sorted.map(d => d.name);
-                    trafficChart.data.datasets[0].backgroundColor = sorted.map(d => {
-                         if (d.traffic > 1000) return '#EBAA99'; 
-                         if (d.traffic > 500) return '#94A3B8';
-                         return '#4A6FA5';
-                    });
-                    trafficChart.data.datasets[0].data = sorted.map(d => d.traffic);
-                    trafficChart.update();
-                } else if (trafficChart) {
-                    // 若無資料，清空圖表
-                    trafficChart.data.labels = [];
-                    trafficChart.data.datasets[0].data = [];
-                    trafficChart.update();
-                }
-            };
-
-            const handleFileSelect = async (e) => {
-                if(e.target.files[0]) {
-                    const file = e.target.files[0];
-                    isUploading.value = true;
-                    uploadProgress.value = 10;
-
-                    const formData = new FormData();
-                    formData.append('file', file);
+                    // 依照違規次數 (violation_count) 由大到小排序
+                    // 前十名
+                    const sorted = [...students.value]
+                        .sort((a,b) => b.violation_count - a.violation_count)
+                        .slice(0, 10);
                     
-                    try {
-                        const res = await fetch('/api/admin/upload', {
-                            method: 'POST',
-                            body: formData
-                        });
-            
-                        if(res.ok) {
-                            uploadProgress.value = 100;
-                            const today = new Date().toISOString().split('T')[0];
-                            uploadHistory.value.unshift({ name: file.name, date: today });
-                            showToast(`已完成「${file.name}」上傳`, 'success');
-                        } else {
-                            showToast('上傳失敗', 'error');
-                        }
-                    } catch(err) {
-                        showToast('上傳錯誤', 'error');
-                    } finally {
-                        isUploading.value = false;
-                        e.target.value = ''; // 清空 input
-                    }
+                    trafficChart.data.labels = sorted.map(d => d.name);
+                    
+                    // 違規越多顏色越紅
+                    trafficChart.data.datasets[0].backgroundColor = sorted.map(d => {
+                         if (d.violation_count >= 5) return '#D98E7D'; // 深紅 (嚴重)
+                         if (d.violation_count >= 1) return '#EBAA99'; // 淺紅 (輕微)
+                         return '#E0EBF5'; // 藍灰 (乖寶寶)
+                    });
+                    
+                    // 違規次數
+                    trafficChart.data.datasets[0].data = sorted.map(d => d.violation_count);
+                    trafficChart.update();
                 }
             };
 
-            const startUploadSimulation = (fileName) => {
-                if(isUploading.value) return;
-                isUploading.value = true;
-                uploadProgress.value = 0;
+            // 檔案上傳
+            const handleFileSelect = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
 
-                // TODO: 這裡之後要改成真實的上傳進度監聽
-                const interval = setInterval(() => {
-                    if(uploadProgress.value >= 100) {
-                        clearInterval(interval);
-                        isUploading.value = false;
-                        const today = new Date().toISOString().split('T')[0].replace(/-/g, '/');
-                        uploadHistory.value.unshift({ name: fileName, date: today });
-                        showToast(`已完成「${fileName}」的知識庫建檔`, 'success', '處理完成');
-                    } else {
-                        uploadProgress.value += Math.floor(Math.random() * 15) + 5;
-                        if(uploadProgress.value > 100) uploadProgress.value = 100;
+                // 建立 FormData 物件來包裝檔案
+                const formData = new FormData();
+                formData.append('file', file);
+
+                isUploading.value = true;
+                uploadProgress.value = 10; // 讓進度條先跑一點點
+
+                try {
+                    // 發送 POST 請求到後端 API
+                    const response = await fetch('http://127.0.0.1:8000/api/admin/upload', {
+                        method: 'POST',
+                        body: formData,
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.detail || '上傳失敗');
                     }
-                }, 300);
+                    
+                    const data = await response.json();
+
+                    // 上傳成功：更新介面
+                    uploadProgress.value = 100;
+                    
+                    setTimeout(() => {
+                        const today = new Date().toISOString().split('T')[0].replace(/-/g, '/');
+                        // 更新列表 (顯示後端回傳的訊息或檔名)
+                        uploadHistory.value.unshift({ 
+                            name: file.name, 
+                            date: today,
+                            info: `知識庫片段: ${data.kb_size || 'N/A'}` 
+                        });
+                        showToast(`上傳成功！已載入教材`, 'success');
+                        isUploading.value = false;
+                    }, 500);
+
+                } catch (error) {
+                    console.error("上傳錯誤:", error);
+                    showToast(error.message, 'error');
+                    isUploading.value = false;
+                } finally {
+                    e.target.value = '';
+                }
             };
 
             const onlineCount = computed(() => students.value.filter(s => s.status === 'online').length);

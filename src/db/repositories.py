@@ -3,10 +3,27 @@ from typing import Optional, List
 from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
+from src.db.models import StudentRecord, ConnectionLog, AuthorizationLog, User
 
-# 引入您定義的資料庫模型
-# 請確保 src/db/models.py 已經建立好
-from src.db.models import StudentRecord, ConnectionLog, AuthorizationLog
+class UserRepository:
+    """
+    負責老師的存取
+    """
+    def get_user_by_email(self, db: Session, email: str) -> Optional[User]:
+        return db.query(User).filter(User.email == email).first()
+
+    def create_user(self, db: Session, name: str, email: str, hashed_password: str) -> User:
+        new_user = User(
+            id=str(uuid.uuid4()),
+            name=name,
+            email=email,
+            hashed_password=hashed_password,
+            created_at=datetime.utcnow()
+        )
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+        return new_user
 
 class StudentRepository:
     """

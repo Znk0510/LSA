@@ -9,6 +9,17 @@ from src.db.database import Base
 # ==========================================
 # 用來在 API 請求/回應中驗證資料格式的
 
+# 註冊 (對應老師前端的 registerForm)
+class RegisterRequest(BaseModel):
+    name: str
+    email: str # Pydantic 會自動驗證是否為 Email 格式
+    password: str
+
+# 登入 (對應老師前端的 loginForm)
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
 class ARPScanResult(BaseModel):
     ip: str
     mac: str
@@ -32,6 +43,16 @@ class AuthorizationRecord(BaseModel):
 # Part 2: SQLAlchemy Models (PostgreSQL 資料表結構)
 # ==========================================
 # 真正會寫入資料庫的表格定義
+
+class User(Base):
+    __tablename__ = 'users'
+
+    id = Column(String, primary_key=True)
+    name = Column(String, nullable=False)
+    email = Column(String, unique=True, index=True, nullable=False)
+    hashed_password = Column(String, nullable=False)
+    role = Column(String, default="teacher")
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 class StudentRecord(Base):
     """學生名單資料表"""
@@ -83,3 +104,4 @@ class QuizAttempt(Base):
     selected_answer = Column(Integer, nullable=False)
     is_correct = Column(Boolean, nullable=False)
     attempted_at = Column(DateTime, default=datetime.utcnow)
+

@@ -1,10 +1,6 @@
-import asyncio
-import random
-import os
-import uuid
+import asyncio, uvicorn, random, os, uuid
 from datetime import datetime, timedelta
 from typing import Optional, List
-
 from fastapi import FastAPI, Request, Depends, Header, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -15,8 +11,9 @@ from src.ai.pdf_loader import pdf_loader
 from src.ai.service import AIQuizService
 
 # 資料庫相關
-from src.db.database import SessionLocal, engine, Base
-from src.db.repositories import AuthorizationLogRepository, StudentRepository
+from src.db.database import get_db, init_db, SessionLocal
+from src.db.models import StudentRecord, ConnectionLog, QuizAttempt, LoginRequest, RegisterRequest, User
+from src.db.repositories import AuthorizationLogRepository, StudentRepository, ConnectionLogRepository, UserRepository
 
 # 核心服務與網路元件
 # 測試用 Mock，實際換成 ShellScriptFirewallController
@@ -46,7 +43,7 @@ app = FastAPI(
 origins = ["http://localhost", "http://127.0.0.1", "http://example.com", "*"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -68,6 +65,7 @@ firewall_controller = MockFirewallController()
 auth_service = AuthorizationService(auth_repo, firewall_controller)
 portal_service = CaptivePortalService(auth_service)
 student_repo = StudentRepository() 
+user_repo = UserRepository()
 
 # --- 題目答案暫存區 ---
 # 結構: { "question_uuid": "A" }
@@ -114,7 +112,7 @@ async def network_scanner_loop():
 @app.on_event("startup")
 async def startup_event():
     # 建立資料庫表格
-    Base.metadata.create_all(bind=engine)
+    init_db()
     os.makedirs("data/uploads", exist_ok=True)
     
     asyncio.create_task(network_scanner_loop())
@@ -144,36 +142,78 @@ async def check_auth_status(
     is_authorized = await portal_service.check_authorization_status(db, mac)
     return {"mac": mac, "authorized": is_authorized}
 
-@app.post("/api/login")
-async def login(data: dict):
-    return {"token": "fake-jwt-token", "user": {"name": "陳老師"}}
-
 # --- Dashboard 相關 API ---
+
+@app.post("/api/register")
+async def register(data: RegisterRequest, db: Session = Depends(get_db)):
+    # 檢查 Email 是否已被註冊
+    existing_user = user_repo.get_user_by_email(db, email=data.email)
+    if existing_user:
+        raise HTTPException(status_code=400, detail="此電子郵件已被註冊")
+    
+    # 簡單把密碼反轉當作加密示範，避免明碼存入
+    fake_hashed_password = data.password + "_secret" 
+    
+    # 寫入資料庫
+    new_user = user_repo.create_user(
+        db=db,
+        name=data.name,
+        email=data.email,
+        hashed_password=fake_hashed_password
+    )
+    
+    return {"status": "success", "message": "註冊成功，請登入", "user_id": new_user.id}
+
+@app.post("/api/login")
+async def login(data: LoginRequest, db: Session = Depends(get_db)):
+    print(f"收到登入請求: {data.email}")
+    
+    # 查詢使用者
+    user = user_repo.get_user_by_email(db, email=data.email)
+    
+    if not user:
+        raise HTTPException(status_code=401, detail="帳號不存在")
+    
+    # 驗證密碼 (對應上面的加密邏輯)
+    verify_password = data.password + "_secret"
+    
+    if user.hashed_password != verify_password:
+        raise HTTPException(status_code=401, detail="密碼錯誤")
+        
+    # 登入成功，回傳資料
+    return {
+        "status": "success",
+        "token": f"token-{uuid.uuid4()}",
+        "user": {
+            "name": user.name,
+            "email": user.email,
+            "role": user.role
+        }
+    }
 
 @app.get("/api/students")
 async def get_students(db: Session = Depends(get_db)):
-    from src.db.models import StudentRecord, ConnectionLog
-    
-    all_students = db.query(StudentRecord).all()
+    students = student_repo.get_all_students(db)
     response_data = []
-    # 判斷狀態 (最近 15 秒內有連線紀錄就算 online)
-    cutoff_time = datetime.utcnow() - timedelta(seconds=15)
     
-    for student in all_students:
-        recent_log = db.query(ConnectionLog)\
-            .filter(ConnectionLog.student_id == student.student_id)\
-            .filter(ConnectionLog.timestamp > cutoff_time)\
+    cutoff_time = datetime.utcnow() - timedelta(seconds=30)
+    
+    for s in students:
+        last_log = db.query(ConnectionLog)\
+            .filter(ConnectionLog.mac_address == s.mac_address)\
+            .order_by(ConnectionLog.timestamp.desc())\
             .first()
             
-        status = "online" if recent_log else "offline"
-        traffic = random.randint(10, 800) if status == "online" else 0
-        
+        is_online = False
+        if last_log and last_log.timestamp > cutoff_time:
+            is_online = True
+            
         response_data.append({
-            "student_id": student.student_id,
-            "name": student.name,
-            "status": status,
-            "traffic": traffic,
-            "mac": student.mac_address
+            "student_id": s.student_id,
+            "name": s.name,
+            "mac": s.mac_address,
+            "status": "online" if is_online else "offline",
+            "violation_count": s.violation_count 
         })
         
     return response_data
@@ -191,6 +231,31 @@ async def upload_material(file: UploadFile = File(...)):
         return {"message": f"成功載入：{file.filename}，知識庫片段數: {len(pdf_loader.knowledge_base)}"}
     else:
         raise HTTPException(status_code=500, detail="解析 PDF 失敗")
+
+# 取得已上傳檔案
+@app.get("/api/admin/files")
+async def get_uploaded_files():
+    upload_dir = "data/uploads"
+    files = []
+    
+    # 確保資料夾存在
+    if os.path.exists(upload_dir):
+        # 讀取資料夾內所有檔案
+        for filename in os.listdir(upload_dir):
+            if filename.endswith(".pdf"):
+                file_path = os.path.join(upload_dir, filename)
+                
+                # 取得檔案建立時間
+                timestamp = os.path.getctime(file_path)
+                date_str = datetime.fromtimestamp(timestamp).strftime('%Y/%m/%d')
+                
+                files.append({
+                    "name": filename,
+                    "date": date_str
+                })
+    
+    # 回傳前端
+    return files
 
 # --- 測驗相關 ---
 
