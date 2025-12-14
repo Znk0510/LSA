@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Focus Flow - 智慧教學管理系統</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: { 50: '#F0F5FA', 100: '#E0EBF5', 500: '#4A6FA5', 600: '#3D5C8A', 700: '#2F486B' },
+                        cream: { 50: '#FCFAF6', 100: '#F9F6F0', 200: '#F4EDE2', 300: '#EBE0D0' },
+                        sakura: { 100: '#FDF2F0', 500: '#EBAA99', 600: '#D98E7D' },
+                        success: { 50: '#F2F9F6', 500: '#5BA890', 600: '#468C75' },
+                        gray: { 50: '#F9F9F9', 100: '#F0F0F0', 200: '#E6E6E6', 300: '#D4D4D4', 400: '#9CA3AF', 500: '#6B7280', 600: '#4B5563', 700: '#374151', 800: '#1F2937', 900: '#111827' }
+                    },
+                    fontFamily: { sans: ['"Noto Sans TC"', 'sans-serif'] },
+                    boxShadow: { 'soft': '0 4px 20px -2px rgba(74, 111, 165, 0.1)', 'card': '0 1px 3px 0 rgba(0, 0, 0, 0.05)' },
+                    animation: { 'fade-in': 'fadeIn 0.5s ease-out', 'slide-up': 'slideUp 0.5s ease-out' },
+                    keyframes: {
+                        fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+                        slideUp: { '0%': { transform: 'translateY(10px)', opacity: '0' }, '100%': { transform: 'translateY(0)', opacity: '1' } }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #F9F9F9; color: #374151; font-family: 'Noto Sans TC', sans-serif; font-size: 16px; letter-spacing: 0.01em; line-height: 1.6; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+        [v-cloak] { display: none; }
+        .spinner { width: 20px; height: 20px; border: 2.5px solid #E0EBF5; border-top-color: #4A6FA5; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        input:focus { outline: none; border-color: #4A6FA5; box-shadow: 0 0 0 3px rgba(74, 111, 165, 0.15); }
+        td, th { padding-top: 1rem; padding-bottom: 1rem; }
+    </style>
+</head>
+<body class="antialiased min-h-screen">
+    <div id="app" class="min-h-screen flex flex-col" v-cloak>
+        
+        <transition enter-active-class="transform ease-out duration-300 transition" enter-from-class="translate-y-2 opacity-0 sm:translate-y-0 sm:translate-x-2" enter-to-class="translate-y-0 opacity-100 sm:translate-x-0" leave-active-class="transition ease-in duration-100" leave-from-class="opacity-100" leave-to-class="opacity-0">
+            <div v-if="systemMessage" class="fixed top-5 right-5 z-50 max-w-md w-full bg-white shadow-soft rounded-lg pointer-events-auto border-l-4 overflow-hidden" 
+                :class="{'border-success-500': systemMessage.type === 'success', 'border-sakura-500': systemMessage.type === 'error', 'border-primary-500': systemMessage.type === 'info'}">
+                <div class="p-5 flex items-center">
+                    <div class="flex-shrink-0">
+                        <span v-if="systemMessage.type === 'success'" class="text-success-500 text-xl">✓</span>
+                        <span v-if="systemMessage.type === 'error'" class="text-sakura-500 text-xl">!</span>
+                        <span v-if="systemMessage.type === 'info'" class="text-primary-500 text-xl">i</span>
+                    </div>
+                    <div class="ml-4 w-0 flex-1">
+                        <p class="text-base font-bold text-gray-900">{{ systemMessage.title || '系統通知' }}</p>
+                        <p class="mt-1 text-sm text-gray-500">{{ systemMessage.text }}</p>
+                    </div>
+                </div>
+            </div>
+        </transition>
+
+        <transition name="fade-in" mode="out-in">
+            <div v-if="currentView === 'auth'" class="min-h-screen flex items-center justify-center bg-gray-50 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
+                <div class="absolute top-0 left-0 w-full h-full overflow-hidden z-0">
+                    <div class="absolute -top-[10%] -left-[5%] w-[40%] h-[40%] rounded-full bg-primary-100/60 blur-3xl"></div>
+                    <div class="absolute top-[50%] right-[0%] w-[35%] h-[35%] rounded-full bg-cream-200/50 blur-3xl"></div>
+                </div>
+
+                <div class="max-w-md w-full space-y-8 bg-white p-8 sm:p-12 rounded-xl shadow-soft relative z-10 border border-gray-200">
+                    <div class="text-center">
+                        <div class="mx-auto h-14 w-14 bg-primary-50 text-primary-500 rounded-xl flex items-center justify-center text-3xl border border-primary-100">📖</div>
+                        <h2 class="mt-6 text-3xl font-bold text-gray-900 tracking-tight">Focus Flow</h2>
+                        <p class="mt-2 text-sm text-gray-500">網路監控系統</p>
+                    </div>
+
+                    <div class="flex border-b border-gray-200">
+                        <button @click="switchAuth('login')" :class="authMode === 'login' ? 'border-primary-500 text-primary-600 font-bold' : 'border-transparent text-gray-400 hover:text-gray-600'" class="w-1/2 py-3 px-1 text-center border-b-2 text-base transition-colors duration-200">登入</button>
+                        <button @click="switchAuth('register')" :class="authMode === 'register' ? 'border-primary-500 text-primary-600 font-bold' : 'border-transparent text-gray-400 hover:text-gray-600'" class="w-1/2 py-3 px-1 text-center border-b-2 text-base transition-colors duration-200">註冊</button>
+                    </div>
+
+                    <form v-if="authMode === 'login'" @submit.prevent="handleLogin" class="mt-8 space-y-6 animate-slide-up">
+                        <div class="space-y-5">
+                            <div>
+                                <label class="block text-sm font-bold text-gray-700 mb-2">電子郵件</label>
+                                <input v-model="loginForm.email" type="text" required class="appearance-none block w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:bg-white transition text-base" placeholder="teacher@school.edu.tw">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold text-gray-700 mb-2">密碼</label>
+                                <input v-model="loginForm.password" type="password" required class="appearance-none block w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:bg-white transition text-base" placeholder="••••••••">
+                            </div>
+                        </div>
+                        <button type="submit" :disabled="isLoading" class="w-full flex justify-center py-3 px-4 border border-transparent text-base font-bold rounded-lg text-white bg-primary-500 hover:bg-primary-600 transition shadow-sm disabled:opacity-70">
+                            <span v-if="isLoading" class="spinner mr-3 border-white border-t-transparent"></span>
+                            {{ isLoading ? '登入中...' : '進入系統' }}
+                        </button>
+                    </form>
+
+                    <form v-else @submit.prevent="handleRegister" class="mt-8 space-y-5 animate-slide-up">
+                        <div><label class="block text-sm font-bold text-gray-700 mb-2">姓名</label><input type="text" v-model="registerForm.name" required class="block w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:bg-white text-base" placeholder="陳老師"></div>
+                        <div><label class="block text-sm font-bold text-gray-700 mb-2">電子郵件</label><input type="email" v-model="registerForm.email" required class="block w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:bg-white text-base" placeholder="teacher@school.edu.tw"></div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div><label class="block text-sm font-bold text-gray-700 mb-2">設定密碼</label><input type="password" v-model="registerForm.password" required class="block w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:bg-white text-base"></div>
+                            <div><label class="block text-sm font-bold text-gray-700 mb-2">確認密碼</label><input type="password" v-model="registerForm.confirm" required class="block w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:bg-white text-base"></div>
+                        </div>
+                        <button type="submit" :disabled="isLoading" class="w-full flex justify-center py-3 px-4 border border-transparent text-base font-bold rounded-lg text-white bg-success-600 hover:bg-success-500 transition shadow-sm disabled:opacity-70">{{ isLoading ? '處理中...' : '註冊帳號' }}</button>
+                    </form>
+                </div>
+            </div>
+
+            <div v-else class="flex flex-col h-screen bg-gray-50 overflow-hidden">
+                
+                <header class="bg-white border-b border-gray-200 h-20 flex items-center justify-between px-8 shadow-sm z-20 flex-shrink-0">
+                    <div class="flex items-center gap-8">
+                        <div class="flex items-center gap-3 text-primary-500 font-bold text-2xl tracking-tight">
+                            <span>📖</span> Focus Flow
+                        </div>
+                        <div class="h-8 w-px bg-gray-300 mx-2"></div>
+                        <div>
+                            <h1 class="text-2xl font-bold tracking-tight text-gray-600">課堂獵殺者</h1>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center gap-8">
+                        <div class="flex items-center gap-4">
+                             <div class="text-sm text-gray-600 bg-cream-50 border border-cream-200 px-4 py-1.5 rounded-full flex items-center gap-2.5">
+                                <span class="w-2 h-2 rounded-full bg-success-500 animate-pulse"></span>
+                                系統連線正常
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-4 pl-8 border-l border-gray-200">
+                            <div class="text-right hidden sm:block">
+                                <p class="text-base font-bold text-gray-800">{{ currentUser?.name }}</p>
+                                <p class="text-sm text-primary-600 cursor-pointer hover:underline" @click="logout">登出</p>
+                            </div>
+                            <div class="w-11 h-11 rounded-full bg-primary-100 text-primary-600 flex items-center justify-center font-bold text-lg border border-primary-200">
+                                {{ currentUser ? currentUser.name.charAt(0) : 'T' }}
+                            </div>
+                        </div>
+                    </div>
+                </header>
+
+                <main class="flex-1 overflow-y-auto p-6 md:p-10 space-y-8 w-full max-w-[1920px] mx-auto">
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                        <div class="bg-white rounded-xl p-6 shadow-card border border-gray-200 flex flex-col justify-between h-36">
+                            <div class="flex justify-between items-start">
+                                <p class="text-sm font-bold text-gray-500 uppercase tracking-wider">班級人數</p>
+                                <div class="p-2 bg-primary-50 rounded-lg text-primary-500"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg></div>
+                            </div>
+                            <h3 class="text-4xl font-bold text-gray-800">{{ students.length }}</h3>
+                        </div>
+                        
+                        <div class="bg-white rounded-xl p-6 shadow-card border border-gray-200 flex flex-col justify-between h-36">
+                            <div class="flex justify-between items-start">
+                                <p class="text-sm font-bold text-gray-500 uppercase tracking-wider">連線中</p>
+                                <div class="p-2 bg-success-50 rounded-lg text-success-500"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div>
+                            </div>
+                            <h3 class="text-4xl font-bold text-success-600">{{ onlineCount }}</h3>
+                        </div>
+
+                        <div class="bg-white rounded-xl p-6 shadow-card border border-gray-200 flex flex-col justify-between h-36">
+                            <div class="flex justify-between items-start">
+                                <p class="text-sm font-bold text-gray-500 uppercase tracking-wider">離線</p>
+                                <div class="p-2 bg-gray-100 rounded-lg text-gray-400"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path></svg></div>
+                            </div>
+                            <h3 class="text-4xl font-bold text-gray-400">{{ offlineCount }}</h3>
+                        </div>
+
+                        <div class="bg-white rounded-xl p-6 shadow-card border border-gray-200 flex flex-col justify-between h-36 relative overflow-hidden">
+                            <div v-if="violationCount > 0" class="absolute top-3 right-3 w-3 h-3 bg-sakura-500 rounded-full animate-pulse"></div>
+                            <div class="flex justify-between items-start">
+                                <p class="text-sm font-bold text-gray-500 uppercase tracking-wider">違規</p>
+                                <div class="p-2 bg-sakura-100 rounded-lg text-sakura-500"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg></div>
+                            </div>
+                            <h3 class="text-4xl font-bold text-sakura-500">{{ violationCount }}</h3>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 h-[calc(100vh-280px)] min-h-[600px]">
+                        
+                        <div class="bg-white rounded-xl shadow-card border border-gray-200 flex flex-col h-full overflow-hidden">
+                            <div class="p-5 border-b border-gray-100 flex justify-between items-center bg-cream-50/50">
+                                <h2 class="text-base font-bold text-gray-800 flex items-center gap-2">
+                                    <span class="text-primary-500">學生狀態列表
+                                </h2>
+                                <div class="flex gap-3 text-sm">
+                                    <button 
+                                        @click="setFilter('all')"
+                                        :class="currentFilter === 'all' ? 'bg-primary-50 text-primary-600 border-primary-200 font-bold' : 'bg-white text-gray-600 border-gray-200 hover:border-primary-500 hover:text-primary-600'"
+                                        class="px-4 py-1.5 border rounded-lg transition shadow-sm">
+                                        全部
+                                    </button>
+                                    <button 
+                                        @click="setFilter('online')"
+                                        :class="currentFilter === 'online' ? 'bg-primary-50 text-primary-600 border-primary-200 font-bold' : 'bg-white text-gray-600 border-gray-200 hover:border-primary-500 hover:text-primary-600'"
+                                        class="px-4 py-1.5 border rounded-lg transition shadow-sm">
+                                        僅顯示連線中
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="flex-1 overflow-y-auto">
+                                <table class="min-w-full divide-y divide-gray-100">
+                                    <thead class="bg-gray-50 sticky top-0 z-10 shadow-sm">
+                                        <tr>
+                                            <th scope="col" class="px-8 py-4 text-left text-sm font-bold text-gray-500 uppercase tracking-wider">狀態</th>
+                                            <th scope="col" class="px-8 py-4 text-left text-sm font-bold text-gray-500 uppercase tracking-wider">姓名 / 學號</th>
+                                            <th scope="col" class="px-8 py-4 text-left text-sm font-bold text-gray-500 uppercase tracking-wider w-1/3">網路流量 (KB/s)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="bg-white divide-y divide-gray-100 text-base">
+                                        <tr v-for="student in filteredStudents" :key="student.student_id" class="hover:bg-cream-50 transition-colors duration-150 group">
+                                            <td class="px-8 py-5 whitespace-nowrap">
+                                                <span :class="getStatusBadgeClass(student)" class="px-3 py-1.5 inline-flex text-xs leading-5 font-bold rounded-full items-center gap-2 border">
+                                                    <span class="w-2 h-2 rounded-full" :class="getStatusDotClass(student)"></span>
+                                                    {{ student.status === 'online' ? (student.traffic > 1000 ? '流量異常' : '連線正常') : '離線' }}
+                                                </span>
+                                            </td>
+                                            <td class="px-8 py-5 whitespace-nowrap">
+                                                <div class="flex items-center">
+                                                    <div class="h-10 w-10 rounded-lg bg-primary-50 text-primary-600 border border-primary-100 flex items-center justify-center font-bold text-base mr-4">
+                                                        {{ getInitials(student.name) }}
+                                                    </div>
+                                                    <div>
+                                                        <div class="text-base font-bold text-gray-800">{{ student.name }}</div>
+                                                        <div class="text-sm text-gray-500">{{ student.student_id }}</div>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td class="px-8 py-5 whitespace-nowrap align-middle">
+                                                <div class="w-full max-w-sm">
+                                                    <div class="flex justify-between text-sm mb-2 font-medium">
+                                                        <span class="text-gray-500">{{ student.traffic.toFixed(0) }} KB/s</span>
+                                                    </div>
+                                                    <div class="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
+                                                        <div class="h-2.5 rounded-full transition-all duration-500 ease-out shadow-sm" 
+                                                             :style="{ width: Math.min((student.traffic / 2500) * 100, 100) + '%' }"
+                                                             :class="getProgressColor(student.traffic)">
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                                <div v-if="filteredStudents.length === 0" class="p-8 text-center text-gray-400 text-sm">
+                                    {{ isLoading ? '資料讀取中...' : '目前無資料，請確認後端連線' }}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-col gap-6 h-full">
+                            
+                            <div class="bg-white rounded-xl shadow-card border border-gray-200 flex flex-col shrink-0 max-h-[55%] overflow-hidden">
+                                <div class="px-6 py-4 border-b border-gray-100 bg-cream-50/50 flex justify-between items-center shrink-0">
+                                    <h2 class="text-base font-bold text-gray-800 flex items-center gap-2">
+                                        <span class="text-primary-500">AI 助教知識庫
+                                    </h2>
+                                    <span class="text-xs bg-success-50 text-success-600 px-2.5 py-1 rounded-md border border-success-500/20 font-bold tracking-wide">
+                                        RAG READY
+                                    </span>
+                                </div>
+                                
+                                <div class="p-6 flex flex-col flex-1 overflow-hidden">
+                                    <div class="relative border-2 border-dashed border-primary-200 rounded-xl bg-gray-50 hover:bg-white hover:border-primary-400 transition-all duration-200 group cursor-pointer p-5 text-center shrink-0">
+                                        <input type="file" @change="handleFileSelect" accept=".pdf,.docx" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" :disabled="isUploading">
+                                        <div class="space-y-2 pointer-events-none">
+                                            <div class="mx-auto w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm border border-gray-100 text-primary-300 group-hover:text-primary-500 group-hover:scale-110 transition-all">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                                            </div>
+                                            <p class="text-sm font-bold text-gray-700">點擊或拖曳上傳教材</p>
+                                            <p class="text-xs text-gray-400">支援 PDF, DOCX</p>
+                                        </div>
+                                    </div>
+
+                                    <div class="mt-4 flex-1 overflow-y-auto pr-1 custom-scroll min-h-[80px]">
+                                        <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">上傳紀錄</h3>
+                                        <ul class="space-y-2">
+                                            <li v-for="(file, index) in uploadHistory" :key="index" class="flex items-center justify-between bg-gray-50 px-3 py-2.5 rounded-lg border border-gray-100 text-sm">
+                                                <div class="flex items-center gap-3 overflow-hidden">
+                                                    <svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2 6 6 0 016 6v1H5a2 2 0 00-2 2v1H2v-1a4 4 0 014-4z" clip-rule="evenodd"></path></svg>
+                                                    <span class="text-gray-700 truncate font-medium">{{ file.name }}</span>
+                                                </div>
+                                                <span class="text-gray-400 text-xs flex-shrink-0 ml-2 font-mono">{{ file.date }}</span>
+                                            </li>
+                                        </ul>
+                                        <div v-if="uploadHistory.length === 0" class="text-center text-gray-400 text-xs py-2">
+                                            尚無上傳紀錄
+                                        </div>
+                                    </div>
+
+                                    <div v-if="isUploading" class="mt-4 pt-4 border-t border-gray-100 animate-fade-in shrink-0">
+                                        <div class="flex justify-between text-sm mb-2">
+                                            <span class="font-bold text-primary-600 flex items-center gap-2">
+                                                <span class="w-2.5 h-2.5 rounded-full border-2 border-primary-500 border-t-transparent animate-spin"></span>
+                                                正在分析...
+                                            </span>
+                                            <span class="font-mono text-primary-600 font-bold">{{ uploadProgress }}%</span>
+                                        </div>
+                                        <div class="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                                            <div class="h-2 rounded-full bg-primary-500 transition-all duration-300 ease-out" :style="{ width: uploadProgress + '%' }"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="bg-white rounded-xl shadow-card border border-gray-200 flex flex-col flex-1 min-h-[250px] overflow-hidden">
+                                <div class="px-6 py-4 border-b border-gray-100 bg-cream-50/50 flex items-center shrink-0">
+                                    <h2 class="text-base font-bold text-gray-800 flex items-center gap-2">
+                                        <span class="text-primary-500">即時流量監測
+                                    </h2>
+                                </div>
+                                
+                                <div class="p-6 relative flex-1 w-full min-h-0">
+                                    <canvas id="trafficChart"></canvas>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                </main>
+            </div>
+        </transition>
+    </div>
+
+    <script>
+    const { createApp, ref, computed, nextTick } = Vue;
+    
+    createApp({
+        setup() {
+            const currentView = ref('auth');
+            const authMode = ref('login'); 
+            const isLoading = ref(false);
+            const currentUser = ref(null);
+            const systemMessage = ref(null);
+            const currentFilter = ref('all');
+
+            const loginForm = ref({ email: '', password: '' });
+            const registerForm = ref({ name: '', email: '', password: '', confirm: '' });
+
+            const students = ref([]); // 待 API 寫入
+            let trafficChart = null;
+            let pollingInterval = null;
+
+            const isUploading = ref(false);
+            const uploadProgress = ref(0);
+            const uploadHistory = ref([]); // 上傳紀錄已清空
+
+            // Helper functions
+            const getInitials = (name) => {
+                if (!name) return '';
+                if (/[\u4e00-\u9fa5]/.test(name)) return name.charAt(0);
+                return name.split(' ').map(n => n[0]).join('').substring(0,2).toUpperCase();
+            };
+
+            const getStatusBadgeClass = (student) => {
+                if (student.status !== 'online') return 'bg-gray-50 text-gray-500 border-gray-200';
+                if (student.traffic > 1000) return 'bg-sakura-50 text-sakura-600 border-sakura-200';
+                return 'bg-success-50 text-success-600 border-success-200';
+            };
+            
+            const getStatusDotClass = (student) => {
+                if (student.status !== 'online') return 'bg-gray-300';
+                if (student.traffic > 1000) return 'bg-sakura-500';
+                return 'bg-success-500';
+            };
+
+            const getProgressColor = (value) => {
+                if (value > 1000) return 'bg-sakura-500';
+                if (value > 500) return 'bg-primary-300';
+                return 'bg-primary-500';
+            };
+
+            const showToast = (text, type = 'info', title = '') => {
+                systemMessage.value = { text, type, title };
+                setTimeout(() => systemMessage.value = null, 3000);
+            };
+
+            const switchAuth = (mode) => {
+                authMode.value = mode;
+                loginForm.value = { email: '', password: '' };
+                registerForm.value = { name: '', email: '', password: '', confirm: '' };
+            };
+
+            const setFilter = (filter) => {
+                currentFilter.value = filter;
+            };
+
+            const filteredStudents = computed(() => {
+                if (currentFilter.value === 'online') {
+                    return students.value.filter(s => s.status === 'online');
+                }
+                return students.value;
+            });
+
+            // 登入邏輯：改成呼叫後端 API 驗證帳密
+            const handleLogin = async () => {
+                isLoading.value = true;
+                
+                // 發送 POST 請求到你的後端 /api/login
+                try {
+                    // 對接真實 API
+                    const res = await fetch('/api/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(loginForm.value)
+                    });
+
+                    if (res.ok) {
+                        currentUser.value = { name: '陳老師', email: 'teacher@school.edu.tw' };
+                        showToast('登入成功', 'success');
+                        enterDashboard();
+                    } else {
+                        showToast('登入失敗', 'error');
+                    }
+                } catch(e) {
+                    console.error(e);
+                    // 開發階段若後端沒開，可以保留原本的 fallback
+                    showToast('連線錯誤，進入離線模式', 'info'); 
+                    enterDashboard();
+                }finally {
+                    isLoading.value = false;
+                }
+            };
+
+            // 註冊邏輯
+            const handleRegister = async () => {
+                if(registerForm.value.password !== registerForm.value.confirm) {
+                    showToast('請確認兩次密碼輸入一致', 'error', '驗證失敗');
+                    return;
+                }
+                isLoading.value = true;
+                
+                // TODO: 呼叫後端註冊 API
+                
+                setTimeout(() => {
+                    isLoading.value = false;
+                    showToast('請使用新帳號登入', 'success', '註冊成功');
+                    authMode.value = 'login';
+                    loginForm.value.email = registerForm.value.email;
+                }, 1000);
+            };
+
+            const logout = () => {
+                if(trafficChart) { trafficChart.destroy(); trafficChart = null; }
+                if(pollingInterval) clearInterval(pollingInterval);
+                currentView.value = 'auth';
+                authMode.value = 'login';
+                currentUser.value = null;
+                students.value = []; // 登出時清空資料
+            };
+
+            const enterDashboard = async () => {
+                currentView.value = 'dashboard';
+                await nextTick();
+                setTimeout(() => {
+                    fetchStudents(); 
+                    initChart();     
+                    updateChart();   
+                    
+                    // 設定輪詢：每 2.5 秒跟後端要一次最新資料
+                    pollingInterval = setInterval(() => { 
+                        fetchStudents(); 
+                        updateChart(); 
+                    }, 2500);
+                }, 100); 
+            };
+
+            // 核心邏輯：從後端獲取學生資料
+            const fetchStudents = async () => {
+                try {
+                    const response = await fetch('/api/students');
+                    if (!response.ok) throw new Error('API 請求失敗');
+        
+                    const data = await response.json();
+
+                    // 更新 Vue 的響應式變數，畫面會自動重繪
+                    students.value = data; 
+
+                } catch (error) {
+                    console.error("無法取得學生資料:", error);
+                    // 如果抓不到資料，保持空陣列或顯示錯誤
+                }
+            };
+
+            const initChart = () => {
+                const ctx = document.getElementById('trafficChart');
+                if(!ctx) return;
+                
+                Chart.defaults.font.family = "'Noto Sans TC', sans-serif";
+                Chart.defaults.color = '#6B7280'; 
+                
+                trafficChart = new Chart(ctx, {
+                    type: 'bar', 
+                    data: {
+                        labels: [],
+                        datasets: [{
+                            label: '網路流量 (KB/s)', 
+                            data: [],
+                            backgroundColor: [],
+                            borderRadius: 6,
+                            barPercentage: 0.65,
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        animation: { duration: 500 },
+                        plugins: { legend: { display: false } },
+                        scales: { 
+                            x: { display: false, grid: { display: false } },
+                            y: { 
+                                grid: { display: false }, 
+                                ticks: { 
+                                    font: { size: 14, weight: '500' },
+                                    color: '#374151',
+                                    autoSkip: false
+                                } 
+                            } 
+                        }
+                    }
+                });
+            };
+            
+            const updateChart = async () => {
+                if(trafficChart && students.value.length > 0) {
+                    const sorted = [...students.value].filter(s => s.status === 'online').sort((a,b) => b.traffic - a.traffic).slice(0, 6);
+                    trafficChart.data.labels = sorted.map(d => d.name);
+                    trafficChart.data.datasets[0].backgroundColor = sorted.map(d => {
+                         if (d.traffic > 1000) return '#EBAA99'; 
+                         if (d.traffic > 500) return '#94A3B8';
+                         return '#4A6FA5';
+                    });
+                    trafficChart.data.datasets[0].data = sorted.map(d => d.traffic);
+                    trafficChart.update();
+                } else if (trafficChart) {
+                    // 若無資料，清空圖表
+                    trafficChart.data.labels = [];
+                    trafficChart.data.datasets[0].data = [];
+                    trafficChart.update();
+                }
+            };
+
+            const handleFileSelect = async (e) => {
+                if(e.target.files[0]) {
+                    const file = e.target.files[0];
+                    isUploading.value = true;
+                    uploadProgress.value = 10;
+
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    
+                    try {
+                        const res = await fetch('/api/admin/upload', {
+                            method: 'POST',
+                            body: formData
+                        });
+            
+                        if(res.ok) {
+                            uploadProgress.value = 100;
+                            const today = new Date().toISOString().split('T')[0];
+                            uploadHistory.value.unshift({ name: file.name, date: today });
+                            showToast(`已完成「${file.name}」上傳`, 'success');
+                        } else {
+                            showToast('上傳失敗', 'error');
+                        }
+                    } catch(err) {
+                        showToast('上傳錯誤', 'error');
+                    } finally {
+                        isUploading.value = false;
+                        e.target.value = ''; // 清空 input
+                    }
+                }
+            };
+
+            const startUploadSimulation = (fileName) => {
+                if(isUploading.value) return;
+                isUploading.value = true;
+                uploadProgress.value = 0;
+
+                // TODO: 這裡之後要改成真實的上傳進度監聽
+                const interval = setInterval(() => {
+                    if(uploadProgress.value >= 100) {
+                        clearInterval(interval);
+                        isUploading.value = false;
+                        const today = new Date().toISOString().split('T')[0].replace(/-/g, '/');
+                        uploadHistory.value.unshift({ name: fileName, date: today });
+                        showToast(`已完成「${fileName}」的知識庫建檔`, 'success', '處理完成');
+                    } else {
+                        uploadProgress.value += Math.floor(Math.random() * 15) + 5;
+                        if(uploadProgress.value > 100) uploadProgress.value = 100;
+                    }
+                }, 300);
+            };
+
+            const onlineCount = computed(() => students.value.filter(s => s.status === 'online').length);
+            const offlineCount = computed(() => students.value.filter(s => s.status === 'offline').length);
+            const violationCount = computed(() => students.value.filter(s => s.traffic > 1000).length);
+
+            return { 
+                currentView, authMode, isLoading, currentUser, systemMessage,
+                loginForm, registerForm, switchAuth, handleLogin, handleRegister, logout,
+                students, onlineCount, offlineCount, violationCount,
+                isUploading, uploadProgress, uploadHistory, handleFileSelect,
+                filteredStudents, currentFilter, setFilter,
+                getInitials, getStatusBadgeClass, getStatusDotClass, getProgressColor
+            };
+        }
+    }).mount('#app');
+    </script>
+</body>
+</html>

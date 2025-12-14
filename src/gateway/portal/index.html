@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>網路存取受限 - 智慧課堂系統</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        /* 額外的動畫定義 */
+        .animate-fade-in { animation: fadeIn 0.3s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+    </style>
+</head>
+<body class="bg-slate-100 min-h-screen flex items-center justify-center p-4 relative">
+    
+    <div id="app" class="w-full max-w-2xl relative z-10">
+        
+        <!-- 背景裝飾 -->
+        <div class="absolute -top-10 -left-10 w-32 h-32 bg-blue-400 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob pointer-events-none"></div>
+        <div class="absolute -bottom-10 -right-10 w-32 h-32 bg-yellow-400 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-2000 pointer-events-none"></div>
+
+        <transition name="fade" mode="out-in">
+            
+            <!-- 1. 轉盤頁 (Warning) -->
+            <div v-if="currentPage === 'warning'" key="warning" class="bg-white/90 backdrop-blur-sm rounded-3xl shadow-2xl p-6 md:p-10 text-center border border-white/50">
+                <div class="inline-flex items-center justify-center w-16 h-16 bg-red-100 rounded-full mb-6 animate-pulse">
+                    <span class="text-3xl">🎰</span>
+                </div>
+                
+                <h1 class="text-3xl md:text-4xl font-extrabold text-slate-800 mb-2 tracking-tight">命運的審判</h1>
+                <p class="text-slate-500 mb-8 text-sm md:text-base">
+                    您的裝置 <code class="font-mono bg-slate-100 px-2 py-0.5 rounded text-slate-600 font-bold border border-slate-200">{{ shortMac }}</code> 因違規被鎖定。<br>
+                    請轉動輪盤，決定您的上網代價。
+                </p>
+                
+                <div class="wheel-container mb-10">
+                    <div class="pointer"></div>
+                    <div class="wheel" :style="{ transform: `rotate(${wheelRotation}deg)` }">
+                        <div class="wheel-label" style="transform: rotate(-60deg);"><span>🧠</span> 知識</div>
+                        <div class="wheel-label" style="transform: rotate(0deg);"><span>💰</span> 資本</div>
+                        <div class="wheel-label" style="transform: rotate(60deg);"><span>🧠</span> 知識</div>
+                        <div class="wheel-label" style="transform: rotate(120deg);"><span>💰</span> 資本</div>
+                        <div class="wheel-label" style="transform: rotate(180deg);"><span>🧠</span> 知識</div>
+                        <div class="wheel-label" style="transform: rotate(240deg);"><span>💰</span> 資本</div>
+                    </div>
+    
+                    <div class="center-btn" @click="spinWheel">
+                        <span v-if="!isSpinning">SPIN</span>
+                        <svg v-else class="animate-spin h-6 w-6 text-slate-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </div>
+                </div>
+
+                <div class="h-16 flex items-center justify-center">
+                    <p v-if="!spinResult && !isSpinning" class="text-slate-400 font-medium text-sm animate-bounce">👇 點擊中間按鈕開始</p>
+                    <p v-else-if="spinResult" class="text-2xl font-bold" :class="spinResult.type === 'quiz' ? 'text-blue-600' : 'text-yellow-600'">
+                        {{ spinResult.text }}
+                    </p>
+                    <p v-else class="text-slate-400 italic">命運轉動中...</p>
+                </div>
+            </div>
+
+            <!-- 2. 測驗頁 (Quiz) -->
+            <div v-else-if="currentPage === 'quiz'" key="quiz" class="bg-white rounded-3xl shadow-2xl p-6 md:p-10 border-t-8 border-blue-500 relative overflow-hidden">
+                <div class="absolute top-0 right-0 -mt-4 -mr-4 text-9xl opacity-5 select-none pointer-events-none">?</div>
+
+                <div class="text-center mb-8">
+                    <span class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold tracking-wide uppercase">Knowledge Check</span>
+                    <h1 class="text-2xl md:text-3xl font-bold text-slate-800 mt-4">知識的贖罪</h1>
+                </div>
+                
+                <div v-if="isLoadingQuiz" class="py-20 flex flex-col items-center justify-center">
+                    <div class="w-12 h-12 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin mb-4"></div>
+                    <p class="text-slate-500 font-medium">AI 考官正在生成題目...</p>
+                </div>
+
+                <div v-if="quiz && !isLoadingQuiz && !isSubmitting" class="mb-8 relative">
+                    <div class="bg-slate-50 rounded-2xl p-6 mb-6 border border-slate-100">
+                        <p class="font-bold text-lg md:text-xl text-slate-800 leading-relaxed">{{ quiz.question }}</p>
+                    </div>
+
+                    <div class="space-y-3">
+                        <label v-for="(option, index) in quiz.options" :key="index" 
+                            class="quiz-option relative flex items-center p-4 border-2 rounded-xl cursor-pointer bg-white transition-all duration-200 group"
+                            :class="selectedAnswer === ['A','B','C','D'][index] ? 'border-blue-500 shadow-md bg-blue-50/30' : 'border-slate-100 hover:border-blue-300 hover:bg-slate-50'">
+                            
+                            <div class="flex-shrink-0 w-8 h-8 rounded-full border-2 mr-4 flex items-center justify-center transition-colors font-bold text-sm"
+                                 :class="selectedAnswer === ['A','B','C','D'][index] ? 'border-blue-500 bg-blue-500 text-white' : 'border-slate-300 text-slate-400 group-hover:border-blue-400'">
+                                 {{ ['A','B','C','D'][index] }}
+                            </div>
+                            
+                            <span class="text-base md:text-lg text-slate-700">{{ option }}</span>
+                            <!-- 強制 value 為 A, B, C, D -->
+                            <input type="radio" :value="['A','B','C','D'][index]" v-model="selectedAnswer" class="hidden">
+                        </label>
+                    </div>
+
+                    <!-- 【新增】答錯抉擇彈窗 (Modal) -->
+                    <div v-if="showFailModal" class="absolute inset-0 bg-white/95 z-50 flex items-center justify-center rounded-2xl animate-fade-in backdrop-blur-sm p-4">
+                        <div class="text-center w-full max-w-sm">
+                            <div class="text-6xl mb-4 animate-bounce">❌</div>
+                            <h3 class="text-2xl font-black text-slate-800 mb-2">回答錯誤！</h3>
+                            <div class="bg-red-50 border border-red-100 rounded-lg p-3 mb-6">
+                                <p class="text-red-500 font-bold text-lg">目前累積罰款：<span class="text-2xl">{{ currentPenalty }}</span> 點</p>
+                            </div>
+                            
+                            <div class="space-y-3">
+                                <button @click="retryQuiz" class="w-full bg-blue-600 text-white py-3.5 rounded-xl font-bold hover:bg-blue-700 transition flex items-center justify-center gap-2">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                                    繼續回答 (答錯再扣20點)
+                                </button>
+                                
+                                <div class="relative flex py-2 items-center">
+                                    <div class="flex-grow border-t border-slate-200"></div>
+                                    <span class="flex-shrink-0 mx-4 text-slate-400 text-xs uppercase tracking-wider">OR</span>
+                                    <div class="flex-grow border-t border-slate-200"></div>
+                                </div>
+
+                                <button @click="giveUpAndPay" class="w-full bg-yellow-500 text-white py-3.5 rounded-xl font-bold hover:bg-yellow-600 transition shadow-lg flex items-center justify-center gap-2">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                    放棄治療 (付清 + 70點)
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="isSubmitting" class="py-12 text-center">
+                    <div class="animate-pulse flex flex-col items-center">
+                        <div class="text-5xl mb-2">🤔</div>
+                        <p class="text-lg text-slate-600">正在審判您的答案...</p>
+                    </div>
+                </div>
+
+                <div v-if="quizResult && !isSubmitting && !showFailModal" class="mb-6 p-6 rounded-2xl text-center border-l-4" 
+                    :class="quizResult.correct ? 'bg-green-50 border-green-500 text-green-800' : 'bg-red-50 border-red-500 text-red-800'">
+                    <p class="text-xl font-bold mb-2 flex items-center justify-center gap-2">
+                        <span v-if="quizResult.correct || quizResult.status === 'unlocked' || quizResult.status === 'pay_penalty'">✅ </span>
+                        <span v-else>❌ </span>
+                        {{ quizResult.message }}
+                    </p>
+                    <p v-if="quizResult.explanation" class="text-sm md:text-base opacity-90 mt-2 bg-white/50 p-3 rounded-lg inline-block text-left">
+                        💡 {{ quizResult.explanation }}
+                    </p>
+                </div>
+
+                <button v-if="quiz && !isLoadingQuiz && !isSubmitting && !quizResult"
+                    @click="submitAnswer" 
+                    :disabled="!selectedAnswer" 
+                    class="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white py-4 rounded-xl font-bold text-lg shadow-lg shadow-blue-500/30 transition-all active:scale-[0.98]">
+                    提交答案
+                </button>
+            </div>
+
+            <!-- 3. 付費頁 (Payment) -->
+            <div v-else-if="currentPage === 'payment'" key="payment" class="bg-white rounded-3xl shadow-2xl p-6 md:p-10 border-t-8 border-yellow-400 relative">
+                <div class="text-center mb-8">
+                    <span class="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-xs font-bold tracking-wide uppercase">Premium Access</span>
+                    <h1 class="text-3xl font-bold text-slate-800 mt-4">資本的制裁</h1>
+                    <p class="text-slate-400 text-sm mt-2">{{ paymentReason || 'Money talks. Time is money.' }}</p>
+                </div>
+
+                <div class="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-6 rounded-2xl shadow-xl mb-8 relative overflow-hidden transform transition hover:scale-[1.02] duration-300">
+                    <div class="absolute -right-6 -top-6 w-24 h-24 rounded-full border-4 border-white/10"></div>
+                    <div class="absolute -left-6 -bottom-6 w-32 h-32 rounded-full bg-white/5"></div>
+                    
+                    <div class="flex justify-between items-start mb-8">
+                        <div class="text-xs text-slate-400 tracking-widest uppercase">Current Due</div>
+                        <!-- 【修改】顯示動態金額 -->
+                        <div class="text-2xl font-mono font-bold text-yellow-400">{{ paymentAmount }} Points</div>
+                    </div>
+
+                    <div class="font-mono text-xl md:text-2xl tracking-widest mb-6 drop-shadow-md">
+                        4242 4242 4242 4242
+                    </div>
+
+                    <div class="flex justify-between items-end">
+                        <div>
+                            <div class="text-[10px] text-slate-400 uppercase">Card Holder</div>
+                            <div class="font-medium tracking-wide">STUDENT 112213080</div>
+                        </div>
+                        <div class="flex gap-4">
+                            <div>
+                                <div class="text-[10px] text-slate-400 uppercase">Expires</div>
+                                <div class="font-mono">12/25</div>
+                            </div>
+                            <div class="w-10 h-6 bg-yellow-500/80 rounded-md flex items-center justify-center">
+                                <div class="w-6 h-4 border border-yellow-200/50 rounded-sm"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="isProcessingPayment" class="text-center py-8">
+                    <div class="inline-block w-12 h-12 border-4 border-yellow-200 border-t-yellow-500 rounded-full animate-spin mb-4"></div>
+                    <p class="text-yellow-600 font-medium animate-pulse">正在聯繫銀行伺服器...</p>
+                </div>
+
+                <a v-else 
+                    :href="'https://t.me/kda_v1_bot?start=' + macAddress + '_' + paymentAmount" 
+                    target="_blank"
+                    class="w-full btn-gold py-4 rounded-xl font-bold text-xl shadow-lg shadow-yellow-500/30 flex items-center justify-center gap-2 cursor-pointer hover:no-underline">
+                    <span>💸</span> 前往 Telegram 支付 ({{ paymentAmount }} 點)
+                </a>
+            </div>
+
+            <!-- 4. 成功頁 (Success) -->
+            <div v-else-if="currentPage === 'success'" key="success" class="bg-white rounded-3xl shadow-2xl p-10 text-center max-w-lg">
+                <div class="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6 animate-[bounce_1s_infinite]">
+                    <svg class="w-12 h-12 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
+                </div>
+                <h1 class="text-3xl font-extrabold text-slate-800 mb-4">授權成功</h1>
+                <p class="text-lg text-slate-600 mb-8">
+                    代價已支付，自由已贖回。<br>
+                    <span class="text-sm text-slate-400">正在將您傳送回原本的旅程...</span>
+                </p>
+                <div class="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                    <div class="bg-green-500 h-2 rounded-full animate-[width_1.5s_ease-in-out]" style="width: 100%"></div>
+                </div>
+            </div>
+
+        </transition>
+    </div>
+
+    <script src="js/portal.js"></script>
+</body>
+</html>
