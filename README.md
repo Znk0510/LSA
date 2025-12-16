@@ -114,7 +114,7 @@ chmod o+r /home/[user]/smart-classroom/src/gateway/portal/index.html
 ```bash
 # 啟動 FastAPI，預設 Port 為 8000
 # 使用 sudo 才能執行 ARP 掃描 (Scapy 需要 root 權限)
-sudo ./venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+sudo ./venv/bin/python -m uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 >[!Warning]
 >`main.py` 中的 WIFI_INTERFACE 和 TARGET_NETWORK 變數依你的實際網卡名稱修改
