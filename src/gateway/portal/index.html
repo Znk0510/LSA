@@ -112,7 +112,7 @@
                             <div class="space-y-3">
                                 <button @click="retryQuiz" class="w-full bg-blue-600 text-white py-3.5 rounded-xl font-bold hover:bg-blue-700 transition flex items-center justify-center gap-2">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-                                    繼續回答 (答錯再扣20點)
+                                    繼續回答 (答錯再扣40點)
                                 </button>
                                 
                                 <div class="relative flex py-2 items-center">
@@ -123,7 +123,7 @@
 
                                 <button @click="giveUpAndPay" class="w-full bg-yellow-500 text-white py-3.5 rounded-xl font-bold hover:bg-yellow-600 transition shadow-lg flex items-center justify-center gap-2">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                                    放棄治療 (付清 + 70點)
+                                    放棄治療 (付清 + 100點)
                                 </button>
                             </div>
                         </div>
@@ -202,7 +202,7 @@
                 </div>
 
                 <a v-else 
-                    :href="'https://t.me/kda_v1_bot?start=' + macAddress + '_' + paymentAmount" 
+                    :href="'https://t.me/KDA_V2_bot?start=pay' + '_' + paymentAmount" 
                     target="_blank"
                     class="w-full btn-gold py-4 rounded-xl font-bold text-xl shadow-lg shadow-yellow-500/30 flex items-center justify-center gap-2 cursor-pointer hover:no-underline">
                     <span>💸</span> 前往 Telegram 支付 ({{ paymentAmount }} 點)

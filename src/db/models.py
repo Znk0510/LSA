@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
 from sqlalchemy import Column, String, DateTime, Boolean, Integer, Text, JSON
-from src.db.database import Base
+from .database import Base
 
 # ==========================================
 # Part 1: Pydantic Models (API 資料傳輸用)
@@ -31,6 +31,7 @@ class Student(BaseModel):
     mac_address: str
     telegram_id: Optional[str] = None
     registered_at: datetime = Field(default_factory=datetime.now)
+    status: str = "offline"
 
 class AuthorizationRecord(BaseModel):
     mac_address: str
@@ -38,6 +39,11 @@ class AuthorizationRecord(BaseModel):
     authorized_at: datetime
     expires_at: Optional[datetime] = None
     details: Dict[str, Any] = {}
+
+class ViolationReport(BaseModel):
+    ip: str
+    violation_type: str
+    action: str
 
 # ==========================================
 # Part 2: SQLAlchemy Models (PostgreSQL 資料表結構)
@@ -63,11 +69,17 @@ class StudentRecord(Base):
     name = Column(String, nullable=False)
     mac_address = Column(String, unique=True, nullable=False, index=True)
     
-    # 實現專注排行榜功能 
-    violation_count = Column(Integer, default=0) # 違規次數
-    focus_time = Column(Integer, default=0)      # 專注時間 (分鐘)
+    # 狀態管理
+    p_status = Column(String, default="NORMAL") 
+    status = Column(String, default="offline") 
     
+    # 專注排行榜與違規統計
+    violation_count = Column(Integer, default=0)
+    focus_time = Column(Integer, default=0)
+    
+    # Telegram 綁定
     telegram_id = Column(String, nullable=True)
+    
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -104,4 +116,3 @@ class QuizAttempt(Base):
     selected_answer = Column(Integer, nullable=False)
     is_correct = Column(Boolean, nullable=False)
     attempted_at = Column(DateTime, default=datetime.utcnow)
-

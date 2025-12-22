@@ -47,11 +47,11 @@ class ShellScriptFirewallController(FirewallControllerInterface):
 
     async def allow_device(self, mac: str) -> None:
         # 呼叫組員的 allow 腳本
-        await self._run_script("allow_user.sh", mac)
+        await self._run_script("restore.sh", mac)
 
-    async def deny_device(self, mac: str) -> None:
-        # 呼叫組員的 block 腳本
-        await self._run_script("block_user.sh", mac)
+    # async def deny_device(self, mac: str) -> None:
+    #     # 呼叫組員的 block 腳本
+    #     await self._run_script("block_game.sh", mac)
 
 # --- 3. Mock 實作 (測試用) ---
 class MockFirewallController(FirewallControllerInterface):

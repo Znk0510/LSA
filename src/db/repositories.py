@@ -6,9 +6,6 @@ from sqlalchemy import desc
 from src.db.models import StudentRecord, ConnectionLog, AuthorizationLog, User
 
 class UserRepository:
-    """
-    負責老師的存取
-    """
     def get_user_by_email(self, db: Session, email: str) -> Optional[User]:
         return db.query(User).filter(User.email == email).first()
 

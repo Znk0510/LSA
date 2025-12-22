@@ -171,7 +171,7 @@
                                 <p class="text-sm font-bold text-gray-500 uppercase tracking-wider">離線</p>
                                 <div class="p-2 bg-gray-100 rounded-lg text-gray-400"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path></svg></div>
                             </div>
-                            <h3 class="text-4xl font-bold text-gray-400">{{ offlineCount }}</h3>
+                            <h3 class="text-4xl font-bold text-gray-400">{{ logoutCount }}</h3>
                         </div>
 
                         <div class="bg-white rounded-xl p-6 shadow-card border border-gray-200 flex flex-col justify-between h-36 relative overflow-hidden">
@@ -346,6 +346,8 @@
             const uploadProgress = ref(0);
             const uploadHistory = ref([]); // 上傳紀錄已清空
 
+            const API_BASE = 'http://127.0.0.1:8000';
+
             // Helper functions
             const getInitials = (name) => {
                 if (!name) return '';
@@ -361,7 +363,7 @@
             
             const getStatusDotClass = (student) => {
                 if (student.status !== 'online') return 'bg-gray-300';
-                if (student.traffic > 1000) return 'bg-sakura-500';
+                if (student.violation_count > 0) return 'bg-sakura-500';
                 return 'bg-success-500';
             };
 
@@ -389,6 +391,8 @@
             const filteredStudents = computed(() => {
                 if (currentFilter.value === 'online') {
                     return students.value.filter(s => s.status === 'online');
+                }else if (currentFilter.value === 'log_out') {
+                    return students.value.filter(s => s.status === 'log_out');
                 }
                 return students.value;
             });
@@ -398,7 +402,7 @@
                 isLoading.value = true;
                 try {
                     // 指向正確的後端 Port 8000
-                    const response = await fetch('http://127.0.0.1:8000/api/login', {
+                    const response = await fetch(`${API_BASE}/api/login`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(loginForm.value)
@@ -416,8 +420,11 @@
                         showToast(data.detail || '登入失敗', 'error');
                     }
                 } catch (error) {
-                    console.error("連線錯誤:", error);
-                    showToast('無法連線到後端 (請確認 Port 8000 有開啟)', 'error');
+                    console.warn("連線失敗，啟動開發者測試模式");
+                    // ★ 開發者後門：如果連不上後端，自動模擬登入成功
+                    currentUser.value = { name: '開發測試員', email: 'dev@test.com' };
+                    showToast('開發模式：已略過後端驗證進入系統', 'info');
+                    enterDashboard();
                 } finally {
                     isLoading.value = false;
                 }
@@ -432,7 +439,7 @@
     
                 try {
                 // 指向 8000 port
-                    const res = await fetch('http://127.0.0.1:8000/api/register', { 
+                    const res = await fetch(`${API_BASE}/api/register`, { 
                         method: 'POST', 
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -486,28 +493,23 @@
             // 核心邏輯：從後端獲取學生資料
             const fetchStudents = async () => {
                 try {
-                    // TODO: 請將此處 URL 替換為你的真實後端 API 地址
-                    // const response = await fetch('/api/students');
-                    
-                    /*
+                    console.log("🚀 準備發送 API 請求...");
+                    const response = await fetch(`${API_BASE}/api/students`);
                     if (!response.ok) throw new Error('API 請求失敗');
                     const data = await response.json();
                     students.value = data; 
-                    */
-                   
-                   // 若尚未接通後端，暫時不執行任何動作，避免報錯
-                   // console.log("正在嘗試從 API 獲取資料...");
+                    console.log("已更新學生資料:", data);
 
                 } catch (error) {
                     console.error("無法取得學生資料:", error);
-                    // showToast('無法連線至伺服器', 'error');
+                    showToast('無法連線至伺服器', 'error');
                 }
             };
             
             // 從後端獲取歷史上傳紀錄
             const fetchUploadHistory = async () => {
                 try {
-                    const res = await fetch('http://127.0.0.1:8000/api/admin/files');
+                    const res = await fetch(`${API_BASE}/api/admin/files`);
                     if (res.ok) {
                         const data = await res.json();
                         uploadHistory.value = data; 
@@ -598,7 +600,7 @@
 
                 try {
                     // 發送 POST 請求到後端 API
-                    const response = await fetch('http://127.0.0.1:8000/api/admin/upload', {
+                    const response = await fetch(`${API_BASE}/api/admin/upload`, {
                         method: 'POST',
                         body: formData,
                     });
@@ -636,12 +638,13 @@
 
             const onlineCount = computed(() => students.value.filter(s => s.status === 'online').length);
             const offlineCount = computed(() => students.value.filter(s => s.status === 'offline').length);
-            const violationCount = computed(() => students.value.filter(s => s.traffic > 1000).length);
+            const logoutCount = computed(() => students.value.filter(s => s.status === 'log_out').length);
+            const violationCount = computed(() => students.value.filter(s => s.violation_count > 0).length);
 
             return { 
                 currentView, authMode, isLoading, currentUser, systemMessage,
                 loginForm, registerForm, switchAuth, handleLogin, handleRegister, logout,
-                students, onlineCount, offlineCount, violationCount,
+                students, onlineCount, offlineCount, logoutCount, violationCount,
                 isUploading, uploadProgress, uploadHistory, handleFileSelect,
                 filteredStudents, currentFilter, setFilter,
                 getInitials, getStatusBadgeClass, getStatusDotClass, getProgressColor

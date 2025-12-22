@@ -20,7 +20,7 @@ class ARPScanner:
         """
         self.interface = interface
 
-    def scan(self, ip_range: str = "192.168.1.105/24") -> List[ARPScanResult]:
+    def scan(self, ip_range: str = "192.168.10.0/24") -> List[ARPScanResult]:
         """
         執行 ARP 掃描
         :param ip_range: 要掃描的網段 (CIDR 格式)
@@ -67,7 +67,7 @@ if __name__ == "__main__":
     import sys
     
     # 預設測試網段
-    target_ip = "192.168.1.105/24" 
+    target_ip = "192.168.10.0/24" 
     if len(sys.argv) > 1:
         target_ip = sys.argv[1]
 
